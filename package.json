@@ -4,6 +4,9 @@
   "main": "dist/index.js",
   "repository": "https://github.com/goloveychuk/esm-shim-webpack-plugin",
   "author": "goloveychuk",
+  "files": [
+    "dist"
+  ],
   "license": "MIT",
   "scripts": {
     "build": "rm -rf dist && mkdir dist && terser define-url-runtime.js -c -m -o dist/define-url-runtime.js && tsc",
