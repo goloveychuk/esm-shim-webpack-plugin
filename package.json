@@ -1,0 +1,20 @@
+{
+  "name": "esm-shim-webpack-plugin",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "repository": "https://github.com/goloveychuk/esm-shim-webpack-plugin",
+  "author": "goloveychuk",
+  "license": "MIT",
+  "scripts": {
+    "build": "terser define-url-runtime.js -c -m -o dist/define-url-runtime.js && tsc",
+    "test": "cd test && webpack -c webpack.config.js && node test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.5",
+    "terser": "^5.19.2",
+    "typescript": "^5.1.6",
+    "webpack": "^5.88.2",
+    "lodash-es": "^4.17.21",
+    "webpack-cli": "^5.1.4"
+  }
+}
