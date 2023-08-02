@@ -6,7 +6,7 @@
   "author": "goloveychuk",
   "license": "MIT",
   "scripts": {
-    "build": "terser define-url-runtime.js -c -m -o dist/define-url-runtime.js && tsc",
+    "build": "rm -rf dist && mkdir dist && terser define-url-runtime.js -c -m -o dist/define-url-runtime.js && tsc",
     "test": "cd test && webpack -c webpack.config.js && node test.mjs"
   },
   "devDependencies": {
