@@ -1,5 +1,5 @@
-import def, {val1, reexported} from './dist/entry.mjs'
-import {entry2Val} from './dist/entry2.mjs'
+import def, {val1, reexported, getDynamic} from './dist/entry.esm.mjs'
+import {entry2Val} from './dist/entry2.esm.mjs'
 import assert from 'assert'
 
 

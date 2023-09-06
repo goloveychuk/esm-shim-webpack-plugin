@@ -1,6 +1,6 @@
 {
   "name": "esm-shim-webpack-plugin",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "main": "dist/index.js",
   "repository": "https://github.com/goloveychuk/esm-shim-webpack-plugin",
   "author": "goloveychuk",

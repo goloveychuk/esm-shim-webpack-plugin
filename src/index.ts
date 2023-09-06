@@ -99,6 +99,15 @@ interface CacheData {
 
 export default class EsmShimPlugin {
   cache = new Map<string, CacheData>();
+  getEsmFileName = (file: string) => {
+    file = file.replace(/\.js$/, '');
+    if (file.includes('.umd')) {
+      file = file.replace('.umd', '.esm');
+    } else {
+      file = file + '.esm'
+    }
+    return file + '.mjs'
+  }
   apply(compiler: Compiler) {
     const cache = this.cache;
     compiler.hooks.thisCompilation.tap({ name: PLUGIN_NAME }, (compilation) => {
@@ -176,7 +185,7 @@ export default class EsmShimPlugin {
             //   continue
             // }
             const file = Array.from(chunk.files.values())[0];
-            const newPath = file.replace(/\.js$/, '.mjs');
+            const newPath = this.getEsmFileName(file)
             if (compilation.assets[newPath]) {
               let source;
               const data = cache.get(newPath);

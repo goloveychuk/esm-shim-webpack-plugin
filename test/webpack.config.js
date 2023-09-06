@@ -8,6 +8,7 @@ module.exports = [
     output: {
       libraryTarget: 'amd',
       globalObject: 'this',
+      publicPath: 'http://localhost:8080/dist/',
     },
     plugins: [new Plugin()],
     externals: { 'lodash-es': 'lodash-es' },
