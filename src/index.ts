@@ -34,85 +34,70 @@ function setsAreEq(set1: Set<string>, set2: Set<string>) {
 }
 
 function generateEsmShim({
-  file,
-  exports,
+  origSource,
+  exportsSet,
   externals,
 }: {
-  file: string;
-  exports: Set<string>;
+  origSource: sources.Source;
+  exportsSet: Set<string>;
   externals: Set<string>;
 }) {
   let importsMapping = ``;
   const imports = Array.from(externals)
     .map((e, ind) => {
       const name = `_imp${ind}`;
-      importsMapping += `"${e}": ${name},`;
-      return `import * as ${name} from "${e}"`;
+      if (ind !== 0)  {
+        importsMapping += ',';
+      }
+      importsMapping += `"${e}":${name}`;
+      return `import * as ${name} from "${e}";`;
     })
-    .join('\n');
+    .join('');
 
-  const uniqueId = crypto.randomBytes(16).toString('hex');
+  // const uniqueId = crypto.randomBytes(16).toString('hex');
 
-  const defineRuntimeUrl = codeToDataUrl(defineRuntime + `/*${uniqueId}*/`);
-  const exportsCode = Array.from(exports)
+  // const defineRuntimeUrl = codeToDataUrl(defineRuntime + `/*${uniqueId}*/`);
+  const exportsCode = Array.from(exportsSet)
     .map((e) => {
       if (e === 'default') {
-        return `export default exp.${e}`;
+        return `export default __esmWebpackPluginMod.${e};`;
       }
-      return `export const ${e} = exp.${e}`;
+      return `export const ${e} = __esmWebpackPluginMod.${e};`;
     })
-    .join('\n');
-  return `${imports}
-import getMod from "${defineRuntimeUrl}";
-import "${makeRelative(file)}"
-
-let exportsMod;
-const {deps, exec} = getMod();
-
-const importsMapping = {${importsMapping}};
-const resolvedDeps = deps.map(dep => {
-  if (dep === "exports") {
-    exportsMod = {};
-    return exportsMod;
-  }
-  if (!(dep in importsMapping)) {
-    throw new Error("Can't resolve dependency " + dep);
-  }
-  return importsMapping[dep];
-})
-let exp = exec(...resolvedDeps);
-if (exportsMod) {
-  exp = exportsMod;
-}
-// if (!exp.__esModule) {
-//   exp = { ...exp, default: exp };
-// }
-${exportsCode}
-`;
+    .join('');
+  const importsMappingCode = `const __esmWebpackPluginImports = {${importsMapping}};`;
+  return [imports, importsMappingCode, defineRuntime, origSource, exportsCode];
 }
 
 interface CacheData {
-  exports: Set<string>;
+  exportsSet: Set<string>;
   externals: Set<string>;
   source: sources.Source;
 }
 
+export const getEsmFileName = (file: string) => {
+  file = file.replace(/\.js$/, '');
+  let suffix = '';
+  if (file.endsWith('.min')) {
+    file = file.replace('.min', '');
+    suffix = '.min';
+  }
+  if (file.includes('.umd')) {
+    file = file.replace('.umd', '.esm');
+  } else {
+    file = file + '.esm';
+  }
+  return file + suffix + '.mjs';
+};
+
 export default class EsmShimPlugin {
   cache = new Map<string, CacheData>();
-  getEsmFileName = (file: string) => {
-    file = file.replace(/\.js$/, '');
-    if (file.includes('.umd')) {
-      file = file.replace('.umd', '.esm');
-    } else {
-      file = file + '.esm'
-    }
-    return file + '.mjs'
-  }
+
   apply(compiler: Compiler) {
     const cache = this.cache;
     compiler.hooks.thisCompilation.tap({ name: PLUGIN_NAME }, (compilation) => {
       const { ExternalModule, Compilation, WebpackError } = compiler.webpack;
-      const { RawSource } = compiler.webpack.sources;
+      const { RawSource, ConcatSource } = compiler.webpack.sources;
 
       compilation.hooks.processAssets.tap(
         {
@@ -161,7 +146,7 @@ export default class EsmShimPlugin {
                 ),
               );
             }
-            const exports = new Set(_exports);
+            const exportsSet = new Set(_exports);
             const entrypoint = compilation.entrypoints.get(name);
             if (!entrypoint) {
               compilation.errors.push(
@@ -184,30 +169,32 @@ export default class EsmShimPlugin {
             //   )
             //   continue
             // }
+            // console.log(chunk)
             const file = Array.from(chunk.files.values())[0];
-            const newPath = this.getEsmFileName(file)
+            const origSource = compilation.assets[file];
+            const newPath = getEsmFileName(file);
             if (compilation.assets[newPath]) {
               let source;
               const data = cache.get(newPath);
               if (
                 data &&
-                setsAreEq(data.exports, exports) &&
+                setsAreEq(data.exportsSet, exportsSet) &&
                 setsAreEq(data.externals, externals)
               ) {
                 source = data.source;
               } else {
-                source = new RawSource(
-                  generateEsmShim({ file, exports, externals }),
+                source = new ConcatSource(
+                  ...generateEsmShim({ origSource, exportsSet, externals }),
                 );
-                cache.set(newPath, { source, exports, externals });
+                cache.set(newPath, { source, exportsSet, externals });
               }
               compilation.updateAsset(newPath, source);
             } else {
-              const source = new RawSource(
-                generateEsmShim({ file, exports, externals }),
+              const source = new ConcatSource(
+                ...generateEsmShim({ origSource, exportsSet, externals }),
               );
               compilation.emitAsset(newPath, source);
-              cache.set(newPath, { source, exports, externals });
+              cache.set(newPath, { source, exportsSet, externals });
               chunk.auxiliaryFiles.add(newPath);
             }
           }
