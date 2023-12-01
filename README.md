@@ -32,35 +32,19 @@ const conf = {
 
 ### Example of generated file:
 ```js
-import * as _imp0 from "lodash-es"
-import getMod from "data:text/javascript;base64,bGV0IG1vZDtjb25zdCBvcmlnaW5hbERlZmluZT1nbG9iYWxUaGlzLmRlZmluZTtnbG9iYWxUaGlzLmRlZmluZT0oZSxpLG8pPT57dmFyIG4scixkPSJzdHJpbmciPT10eXBlb2YgZSxmPWQ/aTplLGw9ZD9vOmk7aWYoQXJyYXkuaXNBcnJheShmKSluPWYscj1sO2Vsc2UgaWYoIm9iamVjdCI9PXR5cGVvZiBmKW49W10scj1mdW5jdGlvbigpe3JldHVybiBmfTtlbHNle2lmKCJmdW5jdGlvbiIhPXR5cGVvZiBmKXRocm93IEVycm9yKCJJbnZhbGlkIGNhbGwgdG8gQU1EIGRlZmluZSgpIik7bj1bXSxyPWZ9aWYobW9kKXRocm93IG5ldyBFcnJvcigiZGVmaW5lIGlzIGNhbGxlZCB0d2ljZSwgcHJldkV4ZWM6XFxuIittb2QuZXhlYysiXFxubmV3RXhlYzpcXG4iK3IpO21vZD17ZGVwczpuLGV4ZWM6cn19LGdsb2JhbFRoaXMuZGVmaW5lLmFtZD0hMDtleHBvcnQgZGVmYXVsdCBmdW5jdGlvbigpe2dsb2JhbFRoaXMuZGVmaW5lPW9yaWdpbmFsRGVmaW5lO2NvbnN0e2V4ZWM6ZSxkZXBzOml9PW1vZDtyZXR1cm4gbW9kPXZvaWQgMCx7ZXhlYzplLGRlcHM6aX19LypmYmYxMjI0MWJkZjFiZWQxZWNiMTc3MzFjNWYxY2FhNyov";
-import "./entry.js"
-
-let exportsMod;
-const {deps, exec} = getMod();
-
-const importsMapping = {"lodash-es": _imp0,};
-const resolvedDeps = deps.map(dep => {
-  if (dep === "exports") {
-    exportsMod = {};
-    return exportsMod;
-  }
-  if (!(dep in importsMapping)) {
-    throw new Error("Can't resolve dependency " + dep);
-  }
-  return importsMapping[dep];
-})
-let exp = exec(...resolvedDeps);
-if (exportsMod) {
-  exp = exportsMod;
-}
-// if (!exp.__esModule) {
-//   exp = { ...exp, default: exp };
-// }
-export default exp.default
-export const reexported = exp.reexported
-export const val1 = exp.val1
-
+import * as _imp0 from "mod/external.esm.min.mjs";const __esmWebpackPluginImports = {"mod/external.esm.min.mjs":_imp0};let __esmWebpackPluginMod;const define=(e,n,r)=>{var i,o,t="string"==typeof e,c=t?n:e,l=t?r:n;if(Array.isArray(c))i=c,o=l;else if("object"==typeof c)i=[],o=function(){return c};else{if("function"!=typeof c)throw Error("Invalid call to AMD define()");i=[],o=c}if(__esmWebpackPluginMod)throw new Error("define is called twice, prevExec:\\n"+mod.exec+"\\nnewExec:\\n"+o);let p;const s=i.map((e=>{if("exports"===e)return p={},p;if(!(e in __esmWebpackPluginImports))throw new Error("Can't resolve dependency "+e);return __esmWebpackPluginImports[e]}));let a=o.apply(void 0,s);p&&(a=p),__esmWebpackPluginMod=a};define.amd=!0;(function webpackUniversalModuleDefinition(root, factory) {
+	if(typeof exports === 'object' && typeof module === 'object')
+		module.exports = factory(require("mod/external.esm.min.mjs"));
+	else if(typeof define === 'function' && define.amd)
+		define(["mod/external.esm.min.mjs"], factory);
+	else {
+		var a = typeof exports === 'object' ? factory(require("mod/external.esm.min.mjs")) : factory(root["mod/external.esm.min.mjs"]);
+		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];
+	}
+})(self, (__WEBPACK_EXTERNAL_MODULE_external__) => {
+return /******/ (() => { // webpackBootstrap
+//....
+});export default __esmWebpackPluginMod.default;export const getDynamic = __esmWebpackPluginMod.getDynamic;export const reexported = __esmWebpackPluginMod.reexported;export const val1 = __esmWebpackPluginMod.val1;
 ```
 
 Data url content is [file](define-url-runtime.js).
