@@ -1,4 +1,3 @@
-import * as crypto from 'crypto';
 import type { Compiler, Chunk, ExternalModule, sources } from 'webpack';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,16 +9,6 @@ const defineRuntime = fs.readFileSync(
 
 const PLUGIN_NAME = 'EsmShimWebpackPlugin';
 
-function makeRelative(file: string) {
-  if (file.startsWith('.')) {
-    return file;
-  }
-  return './' + file;
-}
-
-function codeToDataUrl(code: string) {
-  return `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
-}
 
 function setsAreEq(set1: Set<string>, set2: Set<string>) {
   if (set1.size !== set2.size) {
@@ -31,42 +20,6 @@ function setsAreEq(set1: Set<string>, set2: Set<string>) {
     }
   }
   return true;
-}
-
-function generateEsmShim({
-  origSource,
-  exportsSet,
-  externals,
-}: {
-  origSource: sources.Source;
-  exportsSet: Set<string>;
-  externals: Set<string>;
-}) {
-  let importsMapping = ``;
-  const imports = Array.from(externals)
-    .map((e, ind) => {
-      const name = `_imp${ind}`;
-      if (ind !== 0)  {
-        importsMapping += ',';
-      }
-      importsMapping += `"${e}":${name}`;
-      return `import * as ${name} from "${e}";`;
-    })
-    .join('');
-
-  // const uniqueId = crypto.randomBytes(16).toString('hex');
-
-  // const defineRuntimeUrl = codeToDataUrl(defineRuntime + `/*${uniqueId}*/`);
-  const exportsCode = Array.from(exportsSet)
-    .map((e) => {
-      if (e === 'default') {
-        return `export default __esmWebpackPluginMod.${e};`;
-      }
-      return `export const ${e} = __esmWebpackPluginMod.${e};`;
-    })
-    .join('');
-  const importsMappingCode = `const __esmWebpackPluginImports = {${importsMapping}};`;
-  return [imports, importsMappingCode, defineRuntime, origSource, exportsCode];
 }
 
 interface CacheData {
@@ -90,14 +43,124 @@ export const getEsmFileName = (file: string) => {
   return file + suffix + '.mjs';
 };
 
+const IMPORTS_PLACEHOLDER = '//esm-shim-webpack-plugin-imports';
+const EXPORTS_PLACEHOLDER = '//esm-shim-webpack-plugin-exports';
 export default class EsmShimPlugin {
   cache = new Map<string, CacheData>();
 
   apply(compiler: Compiler) {
+    const { webpack } = compiler;
+
+    class FunctionSource extends webpack.sources.Source {
+      constructor(
+        private readonly origSource: sources.Source,
+        private readonly transform: (content: string) => string,
+      ) {
+        super();
+      }
+
+      source() {
+        let origSource = this.origSource.source();
+        if (Buffer.isBuffer(origSource)) {
+          origSource = origSource.toString('utf8');
+        }
+        return this.transform(origSource);
+      }
+
+      updateHash(hash: any): void {
+        this.origSource.updateHash(hash);
+      }
+
+      size() {
+        return this.origSource.size();
+      }
+
+      map(options: any) {
+        return this.origSource.map(options);
+      }
+
+      sourceAndMap(options: any) {
+        return this.origSource.sourceAndMap(options);
+      }
+    }
+
+    function generateEsmShim({
+      origSource,
+      exportsSet,
+      externals,
+    }: {
+      origSource: sources.Source;
+      exportsSet: Set<string>;
+      externals: Set<string>;
+    }): sources.Source {
+      let importsMapping = ``;
+      const imports = Array.from(externals)
+        .map((e, ind) => {
+          const name = `_imp${ind}`;
+          if (ind !== 0) {
+            importsMapping += ',';
+          }
+          importsMapping += `"${e}":${name}`;
+          return `import * as ${name} from "${e}";`;
+        })
+        .join('');
+
+      // const uniqueId = crypto.randomBytes(16).toString('hex');
+
+      // const defineRuntimeUrl = codeToDataUrl(defineRuntime + `/*${uniqueId}*/`);
+      const exportsCode = Array.from(exportsSet)
+        .map((e) => {
+          if (e === 'default') {
+            return `export default __esmWebpackPluginMod.${e};`;
+          }
+          return `export const ${e} = __esmWebpackPluginMod.${e};`;
+        })
+        .join('');
+      const importsMappingCode = `const __esmWebpackPluginImports = {${importsMapping}};`;
+
+      return new FunctionSource(origSource, (content) =>
+        content
+          .replace(
+            IMPORTS_PLACEHOLDER,
+            imports + importsMappingCode + defineRuntime,
+          )
+          .replace(EXPORTS_PLACEHOLDER, exportsCode),
+      );
+    }
+
     const cache = this.cache;
     compiler.hooks.thisCompilation.tap({ name: PLUGIN_NAME }, (compilation) => {
       const { ExternalModule, Compilation, WebpackError } = compiler.webpack;
       const { RawSource, ConcatSource } = compiler.webpack.sources;
+
+      compilation.hooks.processAssets.tap(
+        {
+          name: PLUGIN_NAME,
+          // stage: Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_TRANSFER + 1, //after terser
+          stage: webpack.Compilation.PROCESS_ASSETS_STAGE_DEV_TOOLING - 1,
+          // stage: Compilation.PROCESS_ASSETS_STAGE_SUMMARIZE,
+        },
+        () => {
+          for (const [name, entry] of compilation.entries.entries()) {
+            const entrypoint = compilation.entrypoints.get(name);
+            if (!entrypoint) {
+              continue;
+            }
+            const chunk = entrypoint.getEntrypointChunk();
+
+            const file = Array.from(chunk.files.values())[0];
+            const origSource = compilation.assets[file];
+            compilation.updateAsset(
+              file,
+              new ConcatSource(
+                `${IMPORTS_PLACEHOLDER}\n`,
+                origSource,
+                `\n${EXPORTS_PLACEHOLDER}\n`,
+              ),
+            );
+          }
+        },
+      );
 
       compilation.hooks.processAssets.tap(
         {
@@ -171,7 +234,8 @@ export default class EsmShimPlugin {
             // }
             // console.log(chunk)
             const file = Array.from(chunk.files.values())[0];
-            const origSource = compilation.assets[file];
+            const origAsset = compilation.getAsset(file)!;
+
             const newPath = getEsmFileName(file);
             if (compilation.assets[newPath]) {
               let source;
@@ -183,17 +247,23 @@ export default class EsmShimPlugin {
               ) {
                 source = data.source;
               } else {
-                source = new ConcatSource(
-                  ...generateEsmShim({ origSource, exportsSet, externals }),
-                );
+                source = generateEsmShim({
+                  origSource: origAsset.source,
+                  exportsSet,
+                  externals,
+                });
+
                 cache.set(newPath, { source, exportsSet, externals });
               }
               compilation.updateAsset(newPath, source);
             } else {
-              const source = new ConcatSource(
-                ...generateEsmShim({ origSource, exportsSet, externals }),
-              );
-              compilation.emitAsset(newPath, source);
+              const source = generateEsmShim({
+                origSource: origAsset.source,
+                exportsSet,
+                externals,
+              });
+
+              compilation.emitAsset(newPath, source, origAsset.info);
               cache.set(newPath, { source, exportsSet, externals });
               chunk.auxiliaryFiles.add(newPath);
             }
