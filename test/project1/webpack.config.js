@@ -3,8 +3,9 @@ const Plugin = require('../..').default;
 module.exports = [
   {
     entry: { entry: './entry.js', entry2: './entry2.js', external: './external.js' },
-    mode: 'development',
-    devtool: false,
+    mode: 'production',
+    // mode: 'development',
+    devtool: 'source-map',
     output: {
       filename: '[name].min.js',
       libraryTarget: 'umd',
