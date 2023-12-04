@@ -1,10 +1,15 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { getEsmFileName } from '../dist/index.js';
+import { getEsmFileName } from '../dist/index';
 import {execa} from 'execa'
+import {SourceMapConsumer} from 'source-map'
+import stackParser from 'error-stack-parser'
 import {rimraf} from 'rimraf'
+import type {Browser} from 'puppeteer-core'
 
-async function getValuesFromBrowser(code) {
+declare const browser: Browser;
+
+async function getValuesFromBrowser(code: string) {
   const dist = path.resolve(__dirname, 'project1/dist');
 
   const page = await browser.newPage();
@@ -12,21 +17,23 @@ async function getValuesFromBrowser(code) {
   await page.setRequestInterception(true);
 
   page.on('request', (interceptedRequest) => {
-    // console.error(interceptedRequest.url());
     if (interceptedRequest.isInterceptResolutionHandled()) return;
     const url = new URL(interceptedRequest.url());
     if (url.hostname !== 'localhost') return interceptedRequest.continue();
     let content;
     const pathname = url.pathname;
+    let contentType = 'application/javascript'
+
     if (pathname === '/__testcase__') {
       content = code;
     } else {
       const p = path.join(dist, pathname);
+      if (p.endsWith('.map')) contentType = 'application/json'
       content = fs.readFileSync(p, 'utf8');
     }
     interceptedRequest.respond({
       body: content,
-      contentType: 'application/javascript',
+      contentType,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods':
@@ -39,6 +46,8 @@ async function getValuesFromBrowser(code) {
   const importmap = {
     imports: { 'mod/': 'http://localhost/' },
   };
+  page.on('pageerror', console.log);
+  page.on('error', console.log);
   await page.addScriptTag({
     content: JSON.stringify(importmap),
     type: 'importmap',
@@ -47,7 +56,6 @@ async function getValuesFromBrowser(code) {
   const result = await page.evaluate(`
     import('mod/__testcase__').then((m) => m.default)
   `);
-
   await page.close();
 
   return result;
@@ -62,15 +70,39 @@ describe('e2e', () => {
   })
   it('should work', async () => {
     const testCase = /*js*/` 
-    import def, {val1, reexported, getDynamic} from 'mod/entry.esm.min.mjs'
+    import def, {val1, reexported, getDynamic, errorStack} from 'mod/entry.esm.min.mjs'
     import {entry2Val} from 'mod/entry2.esm.min.mjs'
-    
-    const result = {val1, def, reexported, entry2Val}
-    export default result
+    export default {val1, def, reexported, entry2Val, errorStack};
     `;
 
-    const val = await getValuesFromBrowser(testCase);
+    const {errorStack, ...val}: any = await getValuesFromBrowser(testCase);
+
+    const dist = path.resolve(__dirname, 'project1/dist');
+    const processedStack = await SourceMapConsumer.with(fs.readFileSync(path.join(dist, 'entry.min.js.map'), 'utf-8'), null, (consumer) => {
+      return stackParser.parse({stack: errorStack} as any).map((frame) => {
+        if (!frame.columnNumber || !frame.lineNumber) return undefined
+
+
+        const pos = consumer.originalPositionFor({column: frame.columnNumber, line: frame.lineNumber});
+        if (!pos || !pos.source) {
+          return undefined
+        }
+        const source = consumer.sourceContentFor(pos.source);
+        if (!source) return undefined
+        const lines = source.split('\n');
+        const line = lines[pos.line! - 1];
+        return pos.line + ': '+line
+       }).filter(Boolean).join('\n')
+    })
     expect(val).toEqual({ val1: 42, def: 42, reexported: 42, entry2Val: 42 });
+    expect(processedStack).toMatchInlineSnapshot(`
+"7:     return new Error('asd').stack
+11: export const errorStack = window.hackToHaveFrame()
+14: export default val1
+14: export default val1
+5: 		define(["mod/external.esm.min.mjs"], factory);
+10: })(self, (__WEBPACK_EXTERNAL_MODULE__4__) => {"
+`)
   });
 });
 
